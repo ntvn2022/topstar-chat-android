@@ -25,13 +25,21 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Rebrand to Topstar Chat
+    - name: Force JDK 17 as default
+      run: |
+        echo "JAVA_HOME=${JAVA_HOME_17_X64}" >> $GITHUB_ENV
+        echo "org.gradle.java.home=${JAVA_HOME_17_X64}" >> gradle.properties
+
+    - name: Rebrand + fix JVM target
       run: |
         # App name
         find . -path "*/values/strings.xml" | xargs sed -i 's|<string name="app_name">Element</string>|<string name="app_name">Topstar Chat</string>|g' 2>/dev/null || true
         # Default homeserver
         find . -name "*.kt" | xargs grep -l "matrix.org" 2>/dev/null | xargs sed -i 's|matrix.org|chat.hauto.store|g' 2>/dev/null || true
         find . -name "config.json" | xargs sed -i 's|matrix.org|chat.hauto.store|g' 2>/dev/null || true
+        # Relax kotlin jvm target validation
+        echo "kotlin.jvm.target.validation.mode=warning" >> gradle.properties
+        echo "org.gradle.java.installations.auto-download=false" >> gradle.properties
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
@@ -40,7 +48,8 @@ jobs:
       run: |
         ./gradlew assembleGplayDebug \
           --no-daemon \
-          -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=512m" \
+          -Dkotlin.jvm.target.validation.mode=warning \
+          -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=768m" \
           -Dorg.gradle.parallel=true
 
     - name: Upload APK
