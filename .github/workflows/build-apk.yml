@@ -25,11 +25,10 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Rebrand + relax kotlin target validation
+    - name: Rebrand to Topstar Chat
       run: |
         find . -path "*/values/strings.xml" | xargs sed -i 's|<string name="app_name">Element</string>|<string name="app_name">Topstar Chat</string>|g' 2>/dev/null || true
-        find . -name "*.kt" | xargs grep -l "matrix.org" 2>/dev/null | xargs sed -i 's|matrix.org|chat.hauto.store|g' 2>/dev/null || true
-        find . -name "config.json" | xargs sed -i 's|matrix.org|chat.hauto.store|g' 2>/dev/null || true
+        find . -name "config.xml" -path "*/values/*" | xargs sed -i 's|https://matrix.org|https://chat.hauto.store|g' 2>/dev/null || true
         echo "kotlin.jvm.target.validation.mode=warning" >> gradle.properties
 
     - name: Grant execute permission for gradlew
