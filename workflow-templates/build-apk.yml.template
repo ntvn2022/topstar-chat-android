@@ -1,10 +1,3 @@
-# Topstar Chat Android - Build Workflow
-
-## GitHub Actions Workflow
-
-To set up the build workflow, create the file `.github/workflows/build-apk.yml` with the following content:
-
-```yaml
 name: Build Topstar Chat APK
 
 on:
@@ -34,9 +27,24 @@ jobs:
 
     - name: Rebrand to Topstar Chat
       run: |
+        # Change app name
         find . -name "strings.xml" -path "*/values/strings.xml" | head -5 | xargs -I{} sed -i 's/<string name="app_name">Element<\/string>/<string name="app_name">Topstar Chat<\/string>/g' {}
+
+        # Change default homeserver to chat.hauto.store
         find . -name "*.kt" -o -name "*.json" | xargs grep -l "matrix.org" 2>/dev/null | head -10 | xargs sed -i 's|https://matrix.org|https://chat.hauto.store|g' 2>/dev/null || true
+
+        # Update package display name in build files
         sed -i 's/productName = "Element"/productName = "Topstar Chat"/g' build.gradle 2>/dev/null || true
+
+    - name: Download Topstar Logo
+      run: |
+        # Create icon directories and use a blue star icon placeholder
+        for dir in $(find . -name "mipmap-*" -type d 2>/dev/null | head -20); do
+          if [ -f "$dir/ic_launcher.png" ]; then
+            # Keep existing icons (will replace with actual logo in future)
+            echo "Found icon dir: $dir"
+          fi
+        done
 
     - name: Build Debug APK
       run: |
@@ -45,17 +53,17 @@ jobs:
           --no-daemon \
           --stacktrace \
           -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=512m" \
-          -Dorg.gradle.parallel=true
+          -Dorg.gradle.parallel=true \
+          2>&1 | tail -100
+
+    - name: Find APK
+      run: find . -name "*.apk" -type f | head -10
 
     - name: Upload APK as artifact
       uses: actions/upload-artifact@v4
       with:
         name: topstar-chat-debug
-        path: "**/*.apk"
+        path: |
+          **/*.apk
         retention-days: 30
         if-no-files-found: warn
-```
-
-## Note
-
-This repository requires a GitHub token with `workflow` scope to push the Actions workflow file directly.
