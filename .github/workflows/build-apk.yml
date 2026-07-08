@@ -25,17 +25,19 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Rebrand to Topstar Chat
+    - name: Fetch Topstar brand repo (scripts + assets)
+      run: git clone --depth 1 https://github.com/ntvn2022/topstar-chat-android.git brand
+
+    - name: Set default homeserver to chat.hauto.store
       run: |
-        find . -path "*/values/strings.xml" | xargs sed -i 's|<string name="app_name">Element</string>|<string name="app_name">Topstar Chat</string>|g' 2>/dev/null || true
-        find . -path "*/values/strings.xml" | xargs sed -i 's|<string name="app_name">Element Classic</string>|<string name="app_name">Topstar Chat</string>|g' 2>/dev/null || true
         find . -name "config.xml" -path "*/values/*" | xargs sed -i 's|https://matrix.org|https://chat.hauto.store|g' 2>/dev/null || true
         echo "kotlin.jvm.target.validation.mode=warning" >> gradle.properties
 
-    - name: Patch keystore (software fallback for TEE error -41)
-      run: |
-        curl -sSL "https://raw.githubusercontent.com/ntvn2022/topstar-chat-android/main/patch_keystore.py" -o /tmp/patch_keystore.py
-        python3 /tmp/patch_keystore.py
+    - name: Apply keystore software-fallback patch (fix TEE -41 crash)
+      run: python3 brand/patch_keystore.py
+
+    - name: Apply Topstar Chat rebrand (name, icons, logos, about screen)
+      run: python3 brand/rebrand_android.py
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
@@ -51,6 +53,6 @@ jobs:
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: topstar-chat-keystorefix-apk
+        name: topstar-chat-rebrand-apk
         path: "**/*.apk"
         retention-days: 30
