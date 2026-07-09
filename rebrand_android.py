@@ -114,6 +114,28 @@ if os.path.exists(urls_xml):
         f.write(u)
     log("urls.xml links -> hauto.store")
 
+# 3b) Strip remaining visible element.io mentions from all string resources
+#     (e.g. "element.io/ems" promo text shown during sign-up, in every locale).
+#     Only touch user-facing strings; functional endpoints live in config.xml.
+strings_files = glob.glob(os.path.join(ROOT, "library", "ui-strings", "src", "main",
+                                       "res", "values*", "strings.xml"))
+strings_files += glob.glob(os.path.join(ROOT, "library", "ui-strings", "src", "main",
+                                        "res", "values*", "donottranslate.xml"))
+changed = 0
+for sf in strings_files:
+    with open(sf, encoding="utf-8") as f:
+        c = f.read()
+    orig_c = c
+    c = c.replace("element.io/ems", "hauto.store")
+    c = c.replace("element.io/help", "hauto.store")
+    c = c.replace("https://element.io", "https://hauto.store")
+    c = c.replace(">element.io<", ">hauto.store<")
+    if c != orig_c:
+        with open(sf, "w", encoding="utf-8") as f:
+            f.write(c)
+        changed += 1
+log("stripped element.io from %d string files" % changed)
+
 # ---------------------------------------------------------------------------
 # 4) Rewrite Help/About screen with Hant Automation contact
 # ---------------------------------------------------------------------------
