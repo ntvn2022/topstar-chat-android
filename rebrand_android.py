@@ -9,6 +9,7 @@ Run from the element-android workspace root. Assets live next to this script
 in brand_assets/.
 """
 import os
+import re
 import glob
 import shutil
 
@@ -52,17 +53,20 @@ log("adaptive icon updated")
 # 2) Splash / login logos: remove old drawables (any module, any variant),
 #    drop replacement PNGs into vector module drawable-nodpi
 # ---------------------------------------------------------------------------
-LOGO_NAMES = ["element_logo_green", "element_logotype", "element_logo_stars"]
+LOGO_NAMES = ["element_logo_green", "element_logotype", "element_logo_stars",
+              "element_splash_white"]
 for name in LOGO_NAMES:
     for p in glob.glob(os.path.join(ROOT, "**", "res", "drawable*", name + ".*"), recursive=True):
         os.remove(p)
         log("removed old " + os.path.relpath(p, ROOT))
-# element_logo_green is referenced via im.vector.lib.ui.styles.R -> must live in ui-styles module.
+# element_logo_green (login logo) + element_splash_white (loading screen) are
+# referenced via im.vector.lib.ui.styles.R -> must live in ui-styles module.
 # The others are referenced only from the vector module.
 vector_nodpi = os.path.join(ROOT, "vector", "src", "main", "res", "drawable-nodpi")
 uistyles_nodpi = os.path.join(ROOT, "library", "ui-styles", "src", "main", "res", "drawable-nodpi")
 DEST = {
     "element_logo_green": uistyles_nodpi,
+    "element_splash_white": uistyles_nodpi,
     "element_logotype": vector_nodpi,
     "element_logo_stars": vector_nodpi,
     "logo_hant": vector_nodpi,
@@ -74,6 +78,61 @@ for name, dstdir in DEST.items():
     shutil.copy(s, os.path.join(dstdir, name + ".png"))
     log(name + " -> " + os.path.relpath(dstdir, ROOT))
 log("splash/wordmark/hant logos installed")
+
+# ---------------------------------------------------------------------------
+# 2d) Brand color: Element green (#0DBD8B) -> Topstar blue (#187DC1) everywhere.
+#     Covers colorPrimary/accent (buttons, create-chat FAB, links, selected
+#     states), the loading-screen background (?colorPrimary) and hardcoded
+#     icon fills. Case-insensitive so alpha-prefixed values (#330DBD8B) match.
+# ---------------------------------------------------------------------------
+TOPSTAR_BLUE = "187DC1"
+color_files = glob.glob(os.path.join(ROOT, "library", "ui-styles", "src", "main",
+                                      "res", "**", "*.xml"), recursive=True)
+color_files += glob.glob(os.path.join(ROOT, "vector", "src", "main",
+                                       "res", "**", "*.xml"), recursive=True)
+recolored = 0
+for cf in color_files:
+    with open(cf, encoding="utf-8") as f:
+        c = f.read()
+    nc = re.sub("0DBD8B", TOPSTAR_BLUE, c, flags=re.IGNORECASE)
+    if nc != c:
+        with open(cf, "w", encoding="utf-8") as f:
+            f.write(nc)
+        recolored += 1
+log("recolored Element green -> #%s in %d files" % (TOPSTAR_BLUE, recolored))
+
+# ---------------------------------------------------------------------------
+# 2e) Login splash screens: enlarge the machine logo so both machines are
+#     visible, and hide the old TOPSTAR wordmark (user wants machines only).
+# ---------------------------------------------------------------------------
+login_layouts = [
+    os.path.join(ROOT, "vector", "src", "main", "res", "layout", "fragment_ftue_auth_splash.xml"),
+    os.path.join(ROOT, "vector", "src", "main", "res", "layout", "fragment_login_splash.xml"),
+]
+logo_old = ('android:id="@+id/loginSplashLogo"\n'
+            '            android:layout_width="64dp"\n'
+            '            android:layout_height="64dp"')
+logo_new = ('android:id="@+id/loginSplashLogo"\n'
+            '            android:layout_width="260dp"\n'
+            '            android:layout_height="120dp"\n'
+            '            android:scaleType="fitCenter"')
+for lay in login_layouts:
+    if not os.path.exists(lay):
+        log("WARN login layout missing: " + lay)
+        continue
+    with open(lay, encoding="utf-8") as f:
+        t = f.read()
+    orig_t = t
+    if logo_old in t:
+        t = t.replace(logo_old, logo_new, 1)
+    else:
+        log("WARN loginSplashLogo size anchor not found in " + os.path.basename(lay))
+    t = t.replace('android:id="@+id/logoType"',
+                  'android:id="@+id/logoType"\n            android:visibility="gone"', 1)
+    if t != orig_t:
+        with open(lay, "w", encoding="utf-8") as f:
+            f.write(t)
+        log("login layout updated: " + os.path.basename(lay))
 
 # ---------------------------------------------------------------------------
 # 2b) App name is set via resValue in vector-app/build.gradle (NOT strings.xml)
