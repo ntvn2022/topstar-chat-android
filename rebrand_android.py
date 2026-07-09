@@ -102,8 +102,9 @@ for cf in color_files:
 log("recolored Element green -> #%s in %d files" % (TOPSTAR_BLUE, recolored))
 
 # ---------------------------------------------------------------------------
-# 2e) Login splash screens: enlarge the machine logo so both machines are
-#     visible, and hide the old TOPSTAR wordmark (user wants machines only).
+# 2e) Login splash screens: solid Topstar-blue background, enlarge the machine
+#     logo, hide the old TOPSTAR wordmark, and recolor text/buttons white so
+#     they stay visible on the blue background.
 # ---------------------------------------------------------------------------
 login_layouts = [
     os.path.join(ROOT, "vector", "src", "main", "res", "layout", "fragment_ftue_auth_splash.xml"),
@@ -123,16 +124,41 @@ for lay in login_layouts:
     with open(lay, encoding="utf-8") as f:
         t = f.read()
     orig_t = t
+    # enlarge logo
     if logo_old in t:
         t = t.replace(logo_old, logo_new, 1)
     else:
         log("WARN loginSplashLogo size anchor not found in " + os.path.basename(lay))
+    # hide old wordmark
     t = t.replace('android:id="@+id/logoType"',
                   'android:id="@+id/logoType"\n            android:visibility="gone"', 1)
+    # solid blue background
+    t = t.replace('android:background="?android:colorBackground"',
+                  'android:background="?colorPrimary"', 1)
+    # title + body text + picto tints -> white on blue
+    t = t.replace('?vctr_content_primary', '@android:color/white')
+    t = t.replace('?vctr_content_secondary', '#DDFFFFFF')
+    # primary "create account" button: white fill, blue text (was blue fill -> invisible)
+    t = t.replace(
+        ('android:id="@+id/loginSplashSubmit"\n'
+         '        style="@style/Widget.Vector.Button.Login"'),
+        ('android:id="@+id/loginSplashSubmit"\n'
+         '        style="@style/Widget.Vector.Button.Login"\n'
+         '        android:textColor="?colorPrimary"\n'
+         '        app:backgroundTint="@android:color/white"'),
+        1)
+    # "already have account" text button -> white text
+    t = t.replace(
+        ('android:id="@+id/loginSplashAlreadyHaveAccount"\n'
+         '        style="@style/Widget.Vector.Button.Text.Login"'),
+        ('android:id="@+id/loginSplashAlreadyHaveAccount"\n'
+         '        style="@style/Widget.Vector.Button.Text.Login"\n'
+         '        android:textColor="@android:color/white"'),
+        1)
     if t != orig_t:
         with open(lay, "w", encoding="utf-8") as f:
             f.write(t)
-        log("login layout updated: " + os.path.basename(lay))
+        log("login layout restyled (blue bg + white text/buttons): " + os.path.basename(lay))
 
 # ---------------------------------------------------------------------------
 # 2b) App name is set via resValue in vector-app/build.gradle (NOT strings.xml)
