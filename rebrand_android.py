@@ -85,9 +85,35 @@ g = g.replace('resValue "string", "app_name", "Element Classic - dbg"',
               'resValue "string", "app_name", "Topstar Chat"')
 g = g.replace('resValue "string", "app_name", "Element Classic"',
               'resValue "string", "app_name", "Topstar Chat"')
+
+# 2c) Release signing: the upstream `release` signingConfig reads gradle
+#     properties (signing.element.*) that don't exist in our fork, which
+#     would break configuration. Rewrite it to read from environment vars
+#     (populated from GitHub Actions secrets), and enable it on the release
+#     build type. Falls back to the debug keystore when env vars are absent
+#     so a plain `assembleFdroidRelease` still configures locally.
+release_sig_old = '''        release {
+            keyAlias project.property("signing.element.keyId")
+            keyPassword project.property("signing.element.keyPassword")
+            storeFile file(project.property("signing.element.storePath"))
+            storePassword project.property("signing.element.storePassword")
+        }'''
+release_sig_new = '''        release {
+            keyAlias System.env.TOPSTAR_KEY_ALIAS ?: 'androiddebugkey'
+            keyPassword System.env.TOPSTAR_KEY_PASSWORD ?: 'android'
+            storeFile file(System.env.TOPSTAR_STORE_FILE ?: './signature/debug.keystore')
+            storePassword System.env.TOPSTAR_STORE_PASSWORD ?: 'android'
+        }'''
+assert release_sig_old in g, "release signingConfig anchor not found"
+g = g.replace(release_sig_old, release_sig_new, 1)
+
+# enable signing on the release build type (upstream leaves it commented out)
+g = g.replace('            // signingConfig signingConfigs.release',
+              '            signingConfig signingConfigs.release')
+
 with open(gradle, "w") as f:
     f.write(g)
-log("app_name resValue -> Topstar Chat")
+log("app_name resValue -> Topstar Chat; release signing wired to env vars")
 
 # ---------------------------------------------------------------------------
 # 3) Replace old informational links
