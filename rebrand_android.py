@@ -196,9 +196,15 @@ g = g.replace(release_sig_old, release_sig_new, 1)
 g = g.replace('            // signingConfig signingConfigs.release',
               '            signingConfig signingConfigs.release')
 
+# 2c-2) Unique applicationId for Google Play (im.vector.app belongs to Element
+#       and cannot be published). Namespace / R class stays im.vector.app.
+assert 'applicationId "im.vector.app"' in g, "applicationId anchor not found"
+g = g.replace('applicationId "im.vector.app"',
+              'applicationId "com.hant.topstarchat"', 1)
+
 with open(gradle, "w") as f:
     f.write(g)
-log("app_name resValue -> Topstar Chat; release signing wired to env vars")
+log("app_name resValue -> Topstar Chat; release signing wired; appId -> com.hant.topstarchat")
 
 # ---------------------------------------------------------------------------
 # 3) Replace old informational links

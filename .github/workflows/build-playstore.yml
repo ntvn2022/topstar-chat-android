@@ -1,0 +1,68 @@
+name: Build Topstar Chat AAB (Google Play)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Element Android (stable v1.6.60)
+      uses: actions/checkout@v4
+      with:
+        repository: element-hq/element-android
+        ref: v1.6.60
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Fetch Topstar brand repo (scripts + assets)
+      run: git clone --depth 1 https://github.com/ntvn2022/topstar-chat-android.git brand
+
+    - name: Set default homeserver to chat.hauto.store
+      run: |
+        find . -name "config.xml" -path "*/values/*" | xargs sed -i 's|https://matrix.org|https://chat.hauto.store|g' 2>/dev/null || true
+        echo "kotlin.jvm.target.validation.mode=warning" >> gradle.properties
+
+    - name: Apply keystore software-fallback patch (fix TEE -41 crash)
+      run: python3 brand/patch_keystore.py
+
+    - name: Apply Topstar Chat rebrand (name, icons, logos, about, color, appId)
+      run: python3 brand/rebrand_android.py
+
+    - name: Decode release keystore from secret
+      run: |
+        echo "$TOPSTAR_KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/topstar-release.keystore"
+        echo "Keystore written: $(wc -c < "$GITHUB_WORKSPACE/topstar-release.keystore") bytes"
+      env:
+        TOPSTAR_KEYSTORE_BASE64: ${{ secrets.TOPSTAR_KEYSTORE_BASE64 }}
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build Signed FDroid Release AAB (App Bundle for Play)
+      env:
+        TOPSTAR_STORE_FILE: ${{ github.workspace }}/topstar-release.keystore
+        TOPSTAR_STORE_PASSWORD: ${{ secrets.TOPSTAR_STORE_PASSWORD }}
+        TOPSTAR_KEY_ALIAS: ${{ secrets.TOPSTAR_KEY_ALIAS }}
+        TOPSTAR_KEY_PASSWORD: ${{ secrets.TOPSTAR_KEY_PASSWORD }}
+      run: |
+        ./gradlew bundleFdroidRelease \
+          --no-daemon \
+          -Dkotlin.jvm.target.validation.mode=warning \
+          -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=768m" \
+          -Dorg.gradle.parallel=true
+
+    - name: Upload AAB
+      uses: actions/upload-artifact@v4
+      with:
+        name: topstar-chat-playstore-aab
+        path: "**/build/outputs/bundle/**/*.aab"
+        retention-days: 30
