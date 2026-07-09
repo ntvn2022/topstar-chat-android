@@ -202,6 +202,21 @@ assert 'applicationId "im.vector.app"' in g, "applicationId anchor not found"
 g = g.replace('applicationId "im.vector.app"',
               'applicationId "com.hant.topstarchat"', 1)
 
+# 2c-3) ABI splits are incompatible with building an Android App Bundle (AAB):
+#       AGP errors "Multiple shrunk-resources files found ... Please disable
+#       building multiple APKs when building an Android app bundle."
+#       Make the ABI split conditional: keep it ON for assemble*/APK builds,
+#       but turn it OFF automatically when any requested task is a bundle task.
+abi_enable_old = '''            abi {
+                // Enables building multiple APKs per ABI.
+                enable true'''
+abi_enable_new = '''            abi {
+                // Enables building multiple APKs per ABI, EXCEPT when building an
+                // Android App Bundle (AAB), where per-ABI splits are not allowed.
+                enable !gradle.startParameter.taskNames.any { it.toLowerCase().contains("bundle") }'''
+assert abi_enable_old in g, "abi split enable anchor not found"
+g = g.replace(abi_enable_old, abi_enable_new, 1)
+
 with open(gradle, "w") as f:
     f.write(g)
 log("app_name resValue -> Topstar Chat; release signing wired; appId -> com.hant.topstarchat")
