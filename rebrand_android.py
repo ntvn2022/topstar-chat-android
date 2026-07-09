@@ -262,11 +262,48 @@ for sf in strings_files:
     c = c.replace("element.io/help", "hauto.store")
     c = c.replace("https://element.io", "https://hauto.store")
     c = c.replace(">element.io<", ">hauto.store<")
+    # Reword leftover "Element" brand mentions to avoid Google Play
+    # impersonation/trademark flags (English base strings from v1.6.60).
+    c = c.replace("A simplified Element with optional tabs",
+                  "A simplified layout with optional tabs")
+    c = c.replace("Enter the address of the Modular Element or Server you want to use",
+                  "Enter the address of the Server you want to use")
+    c = c.replace("Riot is now Element!", "Welcome to Topstar Chat!")
+    c = c.replace("Enable Element Call permission shortcuts",
+                  "Enable call permission shortcuts")
+    c = c.replace("Auto-approve Element Call widgets and grant camera / mic access",
+                  "Auto-approve call widgets and grant camera / mic access")
+    c = c.replace("Element Matrix Services (EMS) is a robust and reliable hosting service for fast, secure and real time communication. Find out how on <a href=\"${ftue_ems_url}\">hauto.store</a>",
+                  "A robust and reliable hosting service for fast, secure and real time communication.")
+    c = c.replace("Connect to Element Matrix Services", "Connect to a hosting service")
+    c = c.replace("Element Matrix Services Address", "Server Address")
+    c = c.replace("Select Element Matrix Services", "Select hosting service")
+    c = c.replace("The new Element X app is needed to join this call.",
+                  "A newer compatible app is needed to join this call.")
     if c != orig_c:
         with open(sf, "w", encoding="utf-8") as f:
             f.write(c)
         changed += 1
 log("stripped element.io from %d string files" % changed)
+
+# ---------------------------------------------------------------------------
+# 3c) Remove REQUEST_INSTALL_PACKAGES permission (Google Play flags it under the
+#     Device & Network Abuse policy; a chat app does not need to sideload APKs).
+#     The in-app "install APK" feature degrades gracefully: the code guards on
+#     packageManager.canRequestPackageInstalls(), which returns false safely.
+# ---------------------------------------------------------------------------
+manifest = os.path.join(ROOT, "vector", "src", "main", "AndroidManifest.xml")
+with open(manifest, encoding="utf-8") as f:
+    m = f.read()
+perm_line = '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n'
+if perm_line in m:
+    m = m.replace('    <!-- To be able to install APK from the application -->\n' + perm_line, '')
+    m = m.replace(perm_line, '')  # fallback if comment differs
+    with open(manifest, "w", encoding="utf-8") as f:
+        f.write(m)
+    log("removed REQUEST_INSTALL_PACKAGES permission (Play policy)")
+else:
+    log("REQUEST_INSTALL_PACKAGES not present (skipped)")
 
 # ---------------------------------------------------------------------------
 # 4) Rewrite Help/About screen with Hant Automation contact
