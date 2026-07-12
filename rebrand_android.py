@@ -323,9 +323,20 @@ push_new = '''        <im.vector.app.core.preference.VectorPreference
             app:isPreferenceVisible="false" />'''
 assert push_old in a, "Push Rules preference anchor not found"
 a = a.replace(push_old, push_new, 1)
+targets_old = '''        <im.vector.app.core.preference.VectorPreference
+            android:persistent="false"
+            android:title="@string/settings_notifications_targets"
+            app:fragment="im.vector.app.features.settings.push.PushGatewaysFragment" />'''
+targets_new = '''        <im.vector.app.core.preference.VectorPreference
+            android:persistent="false"
+            android:title="@string/settings_notifications_targets"
+            app:fragment="im.vector.app.features.settings.push.PushGatewaysFragment"
+            app:isPreferenceVisible="false" />'''
+assert targets_old in a, "Notification Targets preference anchor not found"
+a = a.replace(targets_old, targets_new, 1)
 with open(adv_xml, "w", encoding="utf-8") as f:
     f.write(a)
-log("hidden Push Rules in Advanced settings")
+log("hidden Push Rules + Notification Targets in Advanced settings")
 
 # ---------------------------------------------------------------------------
 # 4) Rewrite Help/About screen with Hant Automation contact
