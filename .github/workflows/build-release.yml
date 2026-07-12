@@ -26,6 +26,13 @@ jobs:
     - name: Fetch Topstar brand repo (scripts + assets)
       run: git clone --depth 1 https://github.com/ntvn2022/topstar-chat-android.git brand
 
+    - name: Apply Topstar feature changes (carousel, name-on-signup, hidden settings)
+      run: |
+        bash brand/apply_topstar_app_changes.sh "$GITHUB_WORKSPACE"
+        mkdir -p vector/src/main/res/drawable-nodpi
+        cp brand/brand_assets/carousel/ic_splash_*.webp vector/src/main/res/drawable-nodpi/
+        echo "Carousel images installed:"; ls -1 vector/src/main/res/drawable-nodpi/ic_splash_*.webp
+
     - name: Set default homeserver to chat.hauto.store
       run: |
         find . -name "config.xml" -path "*/values/*" | xargs sed -i 's|https://matrix.org|https://chat.hauto.store|g' 2>/dev/null || true
