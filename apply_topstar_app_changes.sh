@@ -11,6 +11,14 @@
 #      right after registration.
 #   3. Onboarding/login tweaks (server selection, login fragment,
 #      splash carousel, homeserver alias), settings general/notifications.
+#   4. Homeserver display aliases (chat.hauto.store->chat1,
+#      chat2.hauto.store->chat2) everywhere user ids / room aliases are
+#      shown: member list, mention popup, user directory, member profile,
+#      room profile header, room settings addresses screen.
+#   5. Hide "Make a suggestion"/"Report bug" in the All Chats overflow menu,
+#      hide the Rageshake section in Advanced settings (rage shake off by
+#      default), hide "Publish a new address manually" and
+#      "Add a local address" in room settings.
 #
 # Usage:
 #   ./apply_topstar_app_changes.sh [path-to-clean-element-android]
@@ -76,6 +84,48 @@ index 6ab8892..c91f6fd 100755
  
      <!-- Rageshake configuration -->
      <string name="bug_report_url" translatable="false">https://rageshakes.element.io/api/submit</string>
+diff --git a/vector/src/main/java/im/vector/app/core/epoxy/profiles/BaseProfileMatrixItem.kt b/vector/src/main/java/im/vector/app/core/epoxy/profiles/BaseProfileMatrixItem.kt
+index fe2fa1a..2dd039f 100644
+--- a/vector/src/main/java/im/vector/app/core/epoxy/profiles/BaseProfileMatrixItem.kt
++++ b/vector/src/main/java/im/vector/app/core/epoxy/profiles/BaseProfileMatrixItem.kt
+@@ -16,6 +16,7 @@ import im.vector.app.core.epoxy.VectorEpoxyModel
+ import im.vector.app.core.epoxy.onClick
+ import im.vector.app.core.extensions.setTextOrHide
+ import im.vector.app.features.displayname.getBestName
++import im.vector.app.features.onboarding.ftueauth.HomeserverAlias
+ import im.vector.app.features.home.AvatarRenderer
+ import org.matrix.android.sdk.api.session.crypto.model.UserVerificationLevel
+ import org.matrix.android.sdk.api.util.MatrixItem
+@@ -41,7 +42,7 @@ abstract class BaseProfileMatrixItem<T : ProfileMatrixItem.Holder>(@LayoutRes la
+                 .takeIf { it != "@" }
+         holder.view.onClick(clickListener?.takeIf { editable })
+         holder.titleView.text = bestName
+-        holder.subtitleView.setTextOrHide(matrixId)
++        holder.subtitleView.setTextOrHide(matrixId?.let { HomeserverAlias.aliasize(it) })
+         holder.editableView.isVisible = editable
+         avatarRenderer.render(matrixItem, holder.avatarImageView)
+         holder.avatarDecorationImageView.renderUser(userVerificationLevel)
+diff --git a/vector/src/main/java/im/vector/app/features/autocomplete/member/AutocompleteMemberController.kt b/vector/src/main/java/im/vector/app/features/autocomplete/member/AutocompleteMemberController.kt
+index d07365d..afbc680 100644
+--- a/vector/src/main/java/im/vector/app/features/autocomplete/member/AutocompleteMemberController.kt
++++ b/vector/src/main/java/im/vector/app/features/autocomplete/member/AutocompleteMemberController.kt
+@@ -13,6 +13,7 @@ import im.vector.app.features.autocomplete.AutocompleteClickListener
+ import im.vector.app.features.autocomplete.autocompleteHeaderItem
+ import im.vector.app.features.autocomplete.autocompleteMatrixItem
+ import im.vector.app.features.home.AvatarRenderer
++import im.vector.app.features.onboarding.ftueauth.HomeserverAlias
+ import im.vector.lib.strings.CommonStrings
+ import org.matrix.android.sdk.api.util.toEveryoneInRoomMatrixItem
+ import org.matrix.android.sdk.api.util.toMatrixItem
+@@ -67,7 +68,7 @@ class AutocompleteMemberController @Inject constructor(private val context: Cont
+             roomMember.roomMemberSummary.let { user ->
+                 id(user.userId)
+                 matrixItem(user.toMatrixItem())
+-                subName(user.userId)
++                subName(HomeserverAlias.aliasize(user.userId))
+                 avatarRenderer(host.avatarRenderer)
+                 clickListener { host.listener?.onItemClick(roomMember) }
+             }
 diff --git a/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineViewModel.kt b/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineViewModel.kt
 index f92a062..d05cfc6 100644
 --- a/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineViewModel.kt
@@ -309,6 +359,70 @@ index c58aac5..d82e821 100644
 -
 -    private fun String.toReducedUrlKeepingSchemaIfInsecure() = toReducedUrl(keepSchema = this.startsWith("http://"))
  }
+diff --git a/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/HomeserverAlias.kt b/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/HomeserverAlias.kt
+new file mode 100644
+index 0000000..985e4ba
+--- /dev/null
++++ b/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/HomeserverAlias.kt
+@@ -0,0 +1,58 @@
++/*
++ * Topstar Chat customisation.
++ *
++ * Present homeservers under friendly aliases on the authentication UI
++ * (the "Where your conversations live" field) while the app keeps talking to
++ * the real hostnames internally:
++ *
++ *   chat1  ->  chat.hauto.store
++ *   chat2  ->  chat2.hauto.store
++ *
++ * displayName() maps a real url to its alias (for showing to the user).
++ * resolve()     maps typed input (possibly an alias) back to the real url.
++ *
++ * IMPORTANT: this is display/input sugar only. It must never be used where the
++ * real hostname is required (e.g. building a "@user:server" Matrix id).
++ */
++package im.vector.app.features.onboarding.ftueauth
++
++import im.vector.app.core.extensions.toReducedUrl
++
++object HomeserverAlias {
++
++    // alias (shown to the user) -> real host (used internally)
++    private val aliasToHost = linkedMapOf(
++            "chat1" to "chat.hauto.store",
++            "chat2" to "chat2.hauto.store",
++    )
++    private val hostToAlias = aliasToHost.entries.associate { it.value to it.key }
++
++    /** Turn a real user-facing url into its display alias, falling back to the reduced url. */
++    fun displayName(userFacingUrl: String?): String {
++        val reduced = userFacingUrl.toReducedUrl()
++        return hostToAlias[reduced.lowercase()] ?: reduced
++    }
++
++    /**
++     * Replace real homeserver domains with their aliases inside display text,
++     * e.g. "@qinghe:chat.hauto.store" -> "@qinghe:chat1",
++     *      "#room:chat2.hauto.store"  -> "#room:chat2".
++     * Display sugar only: never feed the result back into the Matrix protocol.
++     */
++    fun aliasize(text: String): String {
++        var out = text
++        aliasToHost.entries.sortedByDescending { it.value.length }.forEach { (alias, host) ->
++            out = out.replace(":" + host, ":" + alias, ignoreCase = true)
++        }
++        return out
++    }
++
++    /** Resolve typed input (possibly an alias) to the real server url. Unknown input is returned unchanged. */
++    fun resolve(input: String): String {
++        val key = input.trim()
++                .substringAfter("://")
++                .trim('/')
++                .lowercase()
++        return aliasToHost[key]?.let { "https://$it" } ?: input
++    }
++}
 diff --git a/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/SplashCarouselStateFactory.kt b/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/SplashCarouselStateFactory.kt
 index 2f0f61d..d80eeb8 100644
 --- a/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/SplashCarouselStateFactory.kt
@@ -389,6 +503,191 @@ index 2f0f61d..d80eeb8 100644
      private fun Int.colorTerminatingFullStop(@AttrRes color: Int): EpoxyCharSequence {
          return stringProvider.getString(this)
                  .colorTerminatingFullStop(ThemeUtils.getColor(context, color))
+diff --git a/vector/src/main/java/im/vector/app/features/roommemberprofile/RoomMemberProfileFragment.kt b/vector/src/main/java/im/vector/app/features/roommemberprofile/RoomMemberProfileFragment.kt
+index 7f0ec9b..056c8be 100644
+--- a/vector/src/main/java/im/vector/app/features/roommemberprofile/RoomMemberProfileFragment.kt
++++ b/vector/src/main/java/im/vector/app/features/roommemberprofile/RoomMemberProfileFragment.kt
+@@ -43,6 +43,7 @@ import im.vector.app.features.analytics.plan.MobileScreen
+ import im.vector.app.features.crypto.verification.user.UserVerificationBottomSheet
+ import im.vector.app.features.displayname.getBestName
+ import im.vector.app.features.home.AvatarRenderer
++import im.vector.app.features.onboarding.ftueauth.HomeserverAlias
+ import im.vector.app.features.home.room.detail.RoomDetailPendingAction
+ import im.vector.app.features.home.room.detail.RoomDetailPendingActionStore
+ import im.vector.app.features.home.room.detail.timeline.helper.MatrixItemColorProvider
+@@ -207,20 +208,20 @@ class RoomMemberProfileFragment :
+         when (val asyncUserMatrixItem = state.userMatrixItem) {
+             Uninitialized,
+             is Loading -> {
+-                views.matrixProfileToolbarTitleView.text = state.userId
++                views.matrixProfileToolbarTitleView.text = HomeserverAlias.aliasize(state.userId)
+                 avatarRenderer.render(MatrixItem.UserItem(state.userId, null, null), views.matrixProfileToolbarAvatarImageView)
+                 headerViews.memberProfileStateView.state = StateView.State.Loading
+             }
+             is Fail -> {
+                 avatarRenderer.render(MatrixItem.UserItem(state.userId, null, null), views.matrixProfileToolbarAvatarImageView)
+-                views.matrixProfileToolbarTitleView.text = state.userId
++                views.matrixProfileToolbarTitleView.text = HomeserverAlias.aliasize(state.userId)
+                 val failureMessage = errorFormatter.toHumanReadable(asyncUserMatrixItem.error)
+                 headerViews.memberProfileStateView.state = StateView.State.Error(failureMessage)
+             }
+             is Success -> {
+                 val userMatrixItem = asyncUserMatrixItem()
+                 headerViews.memberProfileStateView.state = StateView.State.Content
+-                headerViews.memberProfileIdView.text = userMatrixItem.id
++                headerViews.memberProfileIdView.text = HomeserverAlias.aliasize(userMatrixItem.id)
+                 val bestName = userMatrixItem.getBestName()
+                 headerViews.memberProfileNameView.text = bestName
+                 headerViews.memberProfileNameView.setTextColor(matrixItemColorProvider.getColor(userMatrixItem))
+diff --git a/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileFragment.kt b/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileFragment.kt
+index 6c1f3b1..6859547 100644
+--- a/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileFragment.kt
++++ b/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileFragment.kt
+@@ -39,6 +39,7 @@ import im.vector.app.databinding.ViewStubRoomProfileHeaderBinding
+ import im.vector.app.features.analytics.plan.Interaction
+ import im.vector.app.features.analytics.plan.MobileScreen
+ import im.vector.app.features.home.AvatarRenderer
++import im.vector.app.features.onboarding.ftueauth.HomeserverAlias
+ import im.vector.app.features.home.room.detail.RoomDetailPendingAction
+ import im.vector.app.features.home.room.detail.RoomDetailPendingActionStore
+ import im.vector.app.features.home.room.detail.upgrade.MigrateRoomBottomSheet
+@@ -229,7 +230,7 @@ class RoomProfileFragment :
+             } else {
+                 headerViews.roomProfileNameView.text = it.displayName
+                 views.matrixProfileToolbarTitleView.text = it.displayName
+-                headerViews.roomProfileAliasView.setTextOrHide(it.canonicalAlias)
++                headerViews.roomProfileAliasView.setTextOrHide(it.canonicalAlias?.let { alias -> HomeserverAlias.aliasize(alias) })
+                 val matrixItem = it.toMatrixItem()
+                 avatarRenderer.render(matrixItem, headerViews.roomProfileAvatarView)
+                 avatarRenderer.render(matrixItem, views.matrixProfileToolbarAvatarImageView)
+diff --git a/vector/src/main/java/im/vector/app/features/roomprofile/alias/RoomAliasController.kt b/vector/src/main/java/im/vector/app/features/roomprofile/alias/RoomAliasController.kt
+index 924e60d..9e553d8 100644
+--- a/vector/src/main/java/im/vector/app/features/roomprofile/alias/RoomAliasController.kt
++++ b/vector/src/main/java/im/vector/app/features/roomprofile/alias/RoomAliasController.kt
+@@ -24,6 +24,7 @@ import im.vector.app.features.discovery.settingsButtonItem
+ import im.vector.app.features.discovery.settingsContinueCancelItem
+ import im.vector.app.features.discovery.settingsInfoItem
+ import im.vector.app.features.form.formEditTextItem
++import im.vector.app.features.onboarding.ftueauth.HomeserverAlias
+ import im.vector.app.features.form.formSwitchItem
+ import im.vector.app.features.roomdirectory.createroom.RoomAliasErrorFormatter
+ import im.vector.lib.strings.CommonStrings
+@@ -75,7 +76,7 @@ class RoomAliasController @Inject constructor(
+             is Success -> {
+                 formSwitchItem {
+                     id("roomVisibility")
+-                    title(host.stringProvider.getString(CommonStrings.room_alias_publish_to_directory, data.homeServerName))
++                    title(host.stringProvider.getString(CommonStrings.room_alias_publish_to_directory, HomeserverAlias.aliasize(data.homeServerName)))
+                     switchChecked(data.roomDirectoryVisibility() == RoomDirectoryVisibility.PUBLIC)
+                     listener {
+                         if (it) {
+@@ -116,7 +117,7 @@ class RoomAliasController @Inject constructor(
+                 ?.let { canonicalAlias ->
+                     profileActionItem {
+                         id("canonical")
+-                        title(data.canonicalAlias)
++                        title(HomeserverAlias.aliasize(canonicalAlias))
+                         subtitle(host.stringProvider.getString(CommonStrings.room_alias_published_alias_main))
+                         listener { host.callback?.openAliasDetail(canonicalAlias) }
+                     }
+@@ -139,7 +140,7 @@ class RoomAliasController @Inject constructor(
+             data.alternativeAliases.forEachIndexed { idx, altAlias ->
+                 profileActionItem {
+                     id("alt_$idx")
+-                    title(altAlias)
++                    title(HomeserverAlias.aliasize(altAlias))
+                     listener { host.callback?.openAliasDetail(altAlias) }
+                 }
+             }
+@@ -154,14 +155,7 @@ class RoomAliasController @Inject constructor(
+         val host = this
+         when (data.publishManuallyState) {
+             RoomAliasViewState.AddAliasState.Hidden -> Unit
+-            RoomAliasViewState.AddAliasState.Closed -> {
+-                settingsButtonItem {
+-                    id("publishManually")
+-                    colorProvider(host.colorProvider)
+-                    buttonTitleId(CommonStrings.room_alias_published_alias_add_manually)
+-                    buttonClickListener { host.callback?.toggleManualPublishForm() }
+-                }
+-            }
++            RoomAliasViewState.AddAliasState.Closed -> Unit // Topstar: manual publishing hidden
+             is RoomAliasViewState.AddAliasState.Editing -> {
+                 formEditTextItem {
+                     id("publishManuallyEdit")
+@@ -190,7 +184,7 @@ class RoomAliasController @Inject constructor(
+         )
+         settingsInfoItem {
+             id("localInfo")
+-            helperText(host.stringProvider.getString(CommonStrings.room_alias_local_address_subtitle, data.homeServerName))
++            helperText(host.stringProvider.getString(CommonStrings.room_alias_local_address_subtitle, HomeserverAlias.aliasize(data.homeServerName)))
+         }
+ 
+         when (val localAliases = data.localAliases) {
+@@ -210,7 +204,7 @@ class RoomAliasController @Inject constructor(
+                     localAliases().forEachIndexed { idx, localAlias ->
+                         profileActionItem {
+                             id("loc_$idx")
+-                            title(localAlias)
++                            title(HomeserverAlias.aliasize(localAlias))
+                             listener { host.callback?.openAliasDetail(localAlias) }
+                         }
+                     }
+@@ -233,14 +227,7 @@ class RoomAliasController @Inject constructor(
+         val host = this
+         when (data.newLocalAliasState) {
+             RoomAliasViewState.AddAliasState.Hidden -> Unit
+-            RoomAliasViewState.AddAliasState.Closed -> {
+-                settingsButtonItem {
+-                    id("newLocalAliasButton")
+-                    colorProvider(host.colorProvider)
+-                    buttonTitleId(CommonStrings.room_alias_local_address_add)
+-                    buttonClickListener { host.callback?.toggleLocalAliasForm() }
+-                }
+-            }
++            RoomAliasViewState.AddAliasState.Closed -> Unit // Topstar: adding local addresses hidden
+             is RoomAliasViewState.AddAliasState.Editing -> {
+                 formEditTextItem {
+                     id("newLocalAlias")
+diff --git a/vector/src/main/java/im/vector/app/features/settings/VectorPreferences.kt b/vector/src/main/java/im/vector/app/features/settings/VectorPreferences.kt
+index 5741f65..ae046dc 100755
+--- a/vector/src/main/java/im/vector/app/features/settings/VectorPreferences.kt
++++ b/vector/src/main/java/im/vector/app/features/settings/VectorPreferences.kt
+@@ -953,7 +953,7 @@ class VectorPreferences @Inject constructor(
+      * @return true if the rage shake is used
+      */
+     fun useRageshake(): Boolean {
+-        return defaultPrefs.getBoolean(SETTINGS_USE_RAGE_SHAKE_KEY, true)
++        return defaultPrefs.getBoolean(SETTINGS_USE_RAGE_SHAKE_KEY, false)
+     }
+ 
+     /**
+diff --git a/vector/src/main/java/im/vector/app/features/userdirectory/UserDirectoryUserItem.kt b/vector/src/main/java/im/vector/app/features/userdirectory/UserDirectoryUserItem.kt
+index 9982ccb..ce2b4ef 100644
+--- a/vector/src/main/java/im/vector/app/features/userdirectory/UserDirectoryUserItem.kt
++++ b/vector/src/main/java/im/vector/app/features/userdirectory/UserDirectoryUserItem.kt
+@@ -19,6 +19,7 @@ import im.vector.app.core.epoxy.VectorEpoxyHolder
+ import im.vector.app.core.epoxy.VectorEpoxyModel
+ import im.vector.app.core.epoxy.onClick
+ import im.vector.app.features.home.AvatarRenderer
++import im.vector.app.features.onboarding.ftueauth.HomeserverAlias
+ import im.vector.app.features.themes.ThemeUtils
+ import org.matrix.android.sdk.api.util.MatrixItem
+ 
+@@ -36,11 +37,11 @@ abstract class UserDirectoryUserItem : VectorEpoxyModel<UserDirectoryUserItem.Ho
+         // If name is empty, use userId as name and force it being centered
+         if (matrixItem.displayName.isNullOrEmpty()) {
+             holder.userIdView.visibility = View.GONE
+-            holder.nameView.text = matrixItem.id
++            holder.nameView.text = HomeserverAlias.aliasize(matrixItem.id)
+         } else {
+             holder.userIdView.visibility = View.VISIBLE
+             holder.nameView.text = matrixItem.displayName
+-            holder.userIdView.text = matrixItem.id
++            holder.userIdView.text = HomeserverAlias.aliasize(matrixItem.id)
+         }
+         renderSelection(holder, selected)
+     }
 diff --git a/vector/src/main/res/layout/fragment_ftue_combined_register.xml b/vector/src/main/res/layout/fragment_ftue_combined_register.xml
 index 353aa10..d69a918 100644
 --- a/vector/src/main/res/layout/fragment_ftue_combined_register.xml
@@ -440,11 +739,62 @@ index 353aa10..d69a918 100644
  
              <com.google.android.material.textfield.TextInputEditText
                  android:id="@+id/createAccountEditText"
+diff --git a/vector/src/main/res/menu/menu_home.xml b/vector/src/main/res/menu/menu_home.xml
+index a78907b..741e8c7 100644
+--- a/vector/src/main/res/menu/menu_home.xml
++++ b/vector/src/main/res/menu/menu_home.xml
+@@ -11,11 +11,13 @@
+ 
+     <item
+         android:id="@+id/menu_home_suggestion"
++        android:visible="false"
+         android:icon="@drawable/ic_material_bug_report"
+         android:title="@string/send_suggestion" />
+ 
+     <item
+         android:id="@+id/menu_home_report_bug"
++        android:visible="false"
+         android:icon="@drawable/ic_material_bug_report"
+         android:title="@string/send_bug_report" />
+ 
+diff --git a/vector/src/main/res/menu/menu_new_home.xml b/vector/src/main/res/menu/menu_new_home.xml
+index 2292480..fa4f766 100644
+--- a/vector/src/main/res/menu/menu_new_home.xml
++++ b/vector/src/main/res/menu/menu_new_home.xml
+@@ -19,12 +19,14 @@
+ 
+     <item
+         android:id="@+id/menu_home_suggestion"
++        android:visible="false"
+         android:icon="@drawable/ic_material_bug_report"
+         android:title="@string/send_suggestion"
+         app:showAsAction="never" />
+ 
+     <item
+         android:id="@+id/menu_home_report_bug"
++        android:visible="false"
+         android:icon="@drawable/ic_material_bug_report"
+         android:title="@string/send_bug_report"
+         app:showAsAction="never" />
 diff --git a/vector/src/main/res/xml/vector_settings_advanced_settings.xml b/vector/src/main/res/xml/vector_settings_advanced_settings.xml
-index 56609fe..6f24210 100644
+index 56609fe..ef20349 100644
 --- a/vector/src/main/res/xml/vector_settings_advanced_settings.xml
 +++ b/vector/src/main/res/xml/vector_settings_advanced_settings.xml
-@@ -81,12 +81,14 @@
+@@ -48,10 +48,11 @@
+ 
+     <im.vector.app.core.preference.VectorPreferenceCategory
+         android:key="SETTINGS_RAGE_SHAKE_CATEGORY_KEY"
+-        android:title="@string/settings_rageshake">
++        android:title="@string/settings_rageshake"
++        app:isPreferenceVisible="false">
+ 
+         <im.vector.app.core.preference.VectorSwitchPreference
+-            android:defaultValue="true"
++            android:defaultValue="false"
+             android:key="SETTINGS_USE_RAGE_SHAKE_KEY"
+             android:title="@string/send_bug_report_rage_shake" />
+ 
+@@ -81,12 +82,14 @@
  
      <im.vector.app.core.preference.VectorPreferenceCategory
          android:dependency="SETTINGS_DEVELOPER_MODE_PREFERENCE_KEY"
@@ -461,7 +811,7 @@ index 56609fe..6f24210 100644
  
          <im.vector.app.core.preference.VectorPreference
              android:persistent="false"
-@@ -98,7 +100,8 @@
+@@ -98,7 +101,8 @@
              android:key="SETTINGS_ACCESS_TOKEN"
              android:persistent="false"
              android:summary="@string/settings_access_token_summary"
@@ -550,56 +900,6 @@ index 78e1ba4..c45667c 100644
              tools:summary="3To0 8c/K VRJd 4Njb DUgv 6r8A SNp9 ETZt pMwU CpE4 XJE" />
  
          <im.vector.app.core.preference.VectorSwitchPreference
-diff --git a/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/HomeserverAlias.kt b/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/HomeserverAlias.kt
-new file mode 100644
-index 0000000..29023cc
---- /dev/null
-+++ b/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/HomeserverAlias.kt
-@@ -0,0 +1,44 @@
-+/*
-+ * Topstar Chat customisation.
-+ *
-+ * Present homeservers under friendly aliases on the authentication UI
-+ * (the "Where your conversations live" field) while the app keeps talking to
-+ * the real hostnames internally:
-+ *
-+ *   chat1  ->  chat.hauto.store
-+ *   chat2  ->  chat2.hauto.store
-+ *
-+ * displayName() maps a real url to its alias (for showing to the user).
-+ * resolve()     maps typed input (possibly an alias) back to the real url.
-+ *
-+ * IMPORTANT: this is display/input sugar only. It must never be used where the
-+ * real hostname is required (e.g. building a "@user:server" Matrix id).
-+ */
-+package im.vector.app.features.onboarding.ftueauth
-+
-+import im.vector.app.core.extensions.toReducedUrl
-+
-+object HomeserverAlias {
-+
-+    // alias (shown to the user) -> real host (used internally)
-+    private val aliasToHost = linkedMapOf(
-+            "chat1" to "chat.hauto.store",
-+            "chat2" to "chat2.hauto.store",
-+    )
-+    private val hostToAlias = aliasToHost.entries.associate { it.value to it.key }
-+
-+    /** Turn a real user-facing url into its display alias, falling back to the reduced url. */
-+    fun displayName(userFacingUrl: String?): String {
-+        val reduced = userFacingUrl.toReducedUrl()
-+        return hostToAlias[reduced.lowercase()] ?: reduced
-+    }
-+
-+    /** Resolve typed input (possibly an alias) to the real server url. Unknown input is returned unchanged. */
-+    fun resolve(input: String): String {
-+        val key = input.trim()
-+                .substringAfter("://")
-+                .trim('/')
-+                .lowercase()
-+        return aliasToHost[key]?.let { "https://$it" } ?: input
-+    }
-+}
 TOPSTAR_PATCH_EOF
 
 echo ">> Backing up files that will be modified (into .orig if not present)..."
