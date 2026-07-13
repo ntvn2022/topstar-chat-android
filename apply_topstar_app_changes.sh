@@ -24,6 +24,9 @@
 #      hide the room-profile Share button (matrix.to link with real domain).
 #   7. Never auto-open the Bug report screen after a crash (crash file is
 #      silently discarded); hide "send logs" in notification troubleshoot.
+#   8. Aliasize homeserver domain on create-room/create-space screens
+#      (alias suffix + "disable federation" switch); blank bug_report_url
+#      (was Element's rageshake server) and no-op openBugReportScreen.
 #
 # Usage:
 #   ./apply_topstar_app_changes.sh [path-to-clean-element-android]
@@ -77,10 +80,10 @@ index 02c87d3..4a60cff 100644
      <string name="ftue_auth_sign_in_choose_server_header">Where your conversations live</string>
      <string name="ftue_auth_create_account_sso_section_header">Or</string>
 diff --git a/vector-config/src/main/res/values/config.xml b/vector-config/src/main/res/values/config.xml
-index 6ab8892..c91f6fd 100755
+index 6ab8892..4661464 100755
 --- a/vector-config/src/main/res/values/config.xml
 +++ b/vector-config/src/main/res/values/config.xml
-@@ -4,7 +4,7 @@
+@@ -4,10 +4,10 @@
      <!-- "app_name" is now defined in build.gradle -->
  
      <!-- server urls -->
@@ -88,7 +91,11 @@ index 6ab8892..c91f6fd 100755
 +    <string name="matrix_org_server_url" translatable="false">https://chat.hauto.store</string>
  
      <!-- Rageshake configuration -->
-     <string name="bug_report_url" translatable="false">https://rageshakes.element.io/api/submit</string>
+-    <string name="bug_report_url" translatable="false">https://rageshakes.element.io/api/submit</string>
++    <string name="bug_report_url" translatable="false"></string>
+     <string name="bug_report_app_name" translatable="false">riot-android</string>
+     <string name="bug_report_auto_uisi_app_name" translatable="false">element-auto-uisi</string>
+ 
 diff --git a/vector/src/main/java/im/vector/app/core/epoxy/profiles/BaseProfileMatrixItem.kt b/vector/src/main/java/im/vector/app/core/epoxy/profiles/BaseProfileMatrixItem.kt
 index fe2fa1a..2dd039f 100644
 --- a/vector/src/main/java/im/vector/app/core/epoxy/profiles/BaseProfileMatrixItem.kt
@@ -388,10 +395,10 @@ index c58aac5..d82e821 100644
  }
 diff --git a/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/HomeserverAlias.kt b/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/HomeserverAlias.kt
 new file mode 100644
-index 0000000..985e4ba
+index 0000000..55a1432
 --- /dev/null
 +++ b/vector/src/main/java/im/vector/app/features/onboarding/ftueauth/HomeserverAlias.kt
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,63 @@
 +/*
 + * Topstar Chat customisation.
 + *
@@ -439,6 +446,11 @@ index 0000000..985e4ba
 +            out = out.replace(":" + host, ":" + alias, ignoreCase = true)
 +        }
 +        return out
++    }
++
++    /** Map a bare real host (e.g. "chat.hauto.store") to its display alias ("chat1"). */
++    fun displayHost(host: String): String {
++        return hostToAlias[host.trim().lowercase()] ?: host
 +    }
 +
 +    /** Resolve typed input (possibly an alias) to the real server url. Unknown input is returned unchanged. */
@@ -530,6 +542,70 @@ index 2f0f61d..d80eeb8 100644
      private fun Int.colorTerminatingFullStop(@AttrRes color: Int): EpoxyCharSequence {
          return stringProvider.getString(this)
                  .colorTerminatingFullStop(ThemeUtils.getColor(context, color))
+diff --git a/vector/src/main/java/im/vector/app/features/rageshake/BugReporter.kt b/vector/src/main/java/im/vector/app/features/rageshake/BugReporter.kt
+index f1dcc65..c108a27 100755
+--- a/vector/src/main/java/im/vector/app/features/rageshake/BugReporter.kt
++++ b/vector/src/main/java/im/vector/app/features/rageshake/BugReporter.kt
+@@ -489,6 +489,8 @@ class BugReporter @Inject constructor(
+      * Send a bug report either with email or with Vector.
+      */
+     fun openBugReportScreen(activity: FragmentActivity, reportType: ReportType = ReportType.BUG_REPORT) {
++        // Topstar: bug reporting disabled (no rageshake endpoint configured)
++        if (context.getString(R.string.bug_report_url).isBlank()) return
+         screenshot = takeScreenshot(activity)
+         logDbInfo()
+         logProcessInfo()
+diff --git a/vector/src/main/java/im/vector/app/features/roomdirectory/createroom/CreateRoomController.kt b/vector/src/main/java/im/vector/app/features/roomdirectory/createroom/CreateRoomController.kt
+index fe805b7..b7866d5 100644
+--- a/vector/src/main/java/im/vector/app/features/roomdirectory/createroom/CreateRoomController.kt
++++ b/vector/src/main/java/im/vector/app/features/roomdirectory/createroom/CreateRoomController.kt
+@@ -10,6 +10,7 @@ package im.vector.app.features.roomdirectory.createroom
+ import com.airbnb.epoxy.TypedEpoxyController
+ import com.airbnb.mvrx.Fail
+ import com.airbnb.mvrx.Loading
++import im.vector.app.features.onboarding.ftueauth.HomeserverAlias
+ import im.vector.app.core.epoxy.dividerItem
+ import im.vector.app.core.epoxy.profiles.buildProfileAction
+ import im.vector.app.core.resources.StringProvider
+@@ -132,7 +133,7 @@ class CreateRoomController @Inject constructor(
+                 id("alias")
+                 enabled(enableFormElement)
+                 value(viewState.aliasLocalPart)
+-                suffixText(":" + viewState.homeServerName)
++                suffixText(":" + HomeserverAlias.displayHost(viewState.homeServerName))
+                 prefixText("#")
+                 maxLength(MatrixConstants.maxAliasLocalPartLength(viewState.homeServerName))
+                 hint(host.stringProvider.getString(CommonStrings.room_alias_address_hint))
+@@ -183,7 +184,7 @@ class CreateRoomController @Inject constructor(
+             formSwitchItem {
+                 id("federation")
+                 enabled(enableFormElement)
+-                title(host.stringProvider.getString(CommonStrings.create_room_disable_federation_title, viewState.homeServerName))
++                title(host.stringProvider.getString(CommonStrings.create_room_disable_federation_title, HomeserverAlias.displayHost(viewState.homeServerName)))
+                 summary(host.stringProvider.getString(CommonStrings.create_room_disable_federation_description))
+                 switchChecked(viewState.disableFederation)
+                 listener { value -> host.listener?.setDisableFederation(value) }
+diff --git a/vector/src/main/java/im/vector/app/features/roomdirectory/createroom/CreateSubSpaceController.kt b/vector/src/main/java/im/vector/app/features/roomdirectory/createroom/CreateSubSpaceController.kt
+index 75363c3..3838a06 100644
+--- a/vector/src/main/java/im/vector/app/features/roomdirectory/createroom/CreateSubSpaceController.kt
++++ b/vector/src/main/java/im/vector/app/features/roomdirectory/createroom/CreateSubSpaceController.kt
+@@ -10,6 +10,7 @@ package im.vector.app.features.roomdirectory.createroom
+ import com.airbnb.epoxy.TypedEpoxyController
+ import com.airbnb.mvrx.Fail
+ import com.airbnb.mvrx.Loading
++import im.vector.app.features.onboarding.ftueauth.HomeserverAlias
+ import im.vector.app.R
+ import im.vector.app.core.epoxy.profiles.buildProfileAction
+ import im.vector.app.core.resources.StringProvider
+@@ -73,7 +74,7 @@ class CreateSubSpaceController @Inject constructor(
+                 enabled(enableFormElement)
+                 value(data.aliasLocalPart)
+                 hint(host.stringProvider.getString(CommonStrings.create_space_alias_hint))
+-                suffixText(":" + data.homeServerName)
++                suffixText(":" + HomeserverAlias.displayHost(data.homeServerName))
+                 prefixText("#")
+                 maxLength(MatrixConstants.maxAliasLocalPartLength(data.homeServerName))
+                 errorMessage(
 diff --git a/vector/src/main/java/im/vector/app/features/roommemberprofile/RoomMemberProfileFragment.kt b/vector/src/main/java/im/vector/app/features/roommemberprofile/RoomMemberProfileFragment.kt
 index 7f0ec9b..056c8be 100644
 --- a/vector/src/main/java/im/vector/app/features/roommemberprofile/RoomMemberProfileFragment.kt
@@ -737,6 +813,27 @@ index 5d6f48d..dee0a42 100644
  
          views.troubleshootRunButton.debouncedClicks {
              testManager?.retry(TroubleshootTest.TestParameters(testStartForActivityResult, testStartForPermissionResult))
+diff --git a/vector/src/main/java/im/vector/app/features/spaces/create/SpaceDetailEpoxyController.kt b/vector/src/main/java/im/vector/app/features/spaces/create/SpaceDetailEpoxyController.kt
+index 1703fae..ff6f043 100644
+--- a/vector/src/main/java/im/vector/app/features/spaces/create/SpaceDetailEpoxyController.kt
++++ b/vector/src/main/java/im/vector/app/features/spaces/create/SpaceDetailEpoxyController.kt
+@@ -9,6 +9,7 @@ package im.vector.app.features.spaces.create
+ 
+ import com.airbnb.epoxy.TypedEpoxyController
+ import com.airbnb.mvrx.Fail
++import im.vector.app.features.onboarding.ftueauth.HomeserverAlias
+ import im.vector.app.core.epoxy.TextListener
+ import im.vector.app.core.resources.StringProvider
+ import im.vector.app.core.ui.list.genericFooterItem
+@@ -85,7 +86,7 @@ class SpaceDetailEpoxyController @Inject constructor(
+                 forceUpdateValue(!data.aliasManuallyModified)
+                 value(data.aliasLocalPart)
+                 hint(host.stringProvider.getString(CommonStrings.create_space_alias_hint))
+-                suffixText(":" + data.homeServerName)
++                suffixText(":" + HomeserverAlias.displayHost(data.homeServerName))
+                 prefixText("#")
+                 maxLength(MatrixConstants.maxAliasLocalPartLength(data.homeServerName))
+                 onFocusChange { hasFocus ->
 diff --git a/vector/src/main/java/im/vector/app/features/userdirectory/UserDirectoryUserItem.kt b/vector/src/main/java/im/vector/app/features/userdirectory/UserDirectoryUserItem.kt
 index 9982ccb..ce2b4ef 100644
 --- a/vector/src/main/java/im/vector/app/features/userdirectory/UserDirectoryUserItem.kt
