@@ -202,6 +202,13 @@ assert 'applicationId "im.vector.app"' in g, "applicationId anchor not found"
 g = g.replace('applicationId "im.vector.app"',
               'applicationId "com.hant.topstarchat"', 1)
 
+# 2c-2b) User-facing version: replace Element's 1.6.60(-dev) with Topstar's own
+#        1.0.0 (versionCode stays derived from Element's, still monotonic).
+g = g.replace('versionName "${versionMajor}.${versionMinor}.${versionPatch}${getGplayVersionSuffix()}"',
+              'versionName "1.0.0"')
+g = g.replace('versionName "${versionMajor}.${versionMinor}.${versionPatch}${getFdroidVersionSuffix()}"',
+              'versionName "1.0.0"')
+
 # 2c-3) ABI splits are incompatible with building an Android App Bundle (AAB):
 #       AGP errors "Multiple shrunk-resources files found ... Please disable
 #       building multiple APKs when building an Android app bundle."
