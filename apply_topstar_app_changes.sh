@@ -19,6 +19,11 @@
 #      hide the Rageshake section in Advanced settings (rage shake off by
 #      default), hide "Publish a new address manually" and
 #      "Add a local address" in room settings.
+#   6. Hide the whole "Room addresses" screen: remove its entry in Room
+#      settings Advanced, alias-header tap opens room settings instead,
+#      hide the room-profile Share button (matrix.to link with real domain).
+#   7. Never auto-open the Bug report screen after a crash (crash file is
+#      silently discarded); hide "send logs" in notification troubleshoot.
 #
 # Usage:
 #   ./apply_topstar_app_changes.sh [path-to-clean-element-android]
@@ -126,6 +131,28 @@ index d07365d..afbc680 100644
                  avatarRenderer(host.avatarRenderer)
                  clickListener { host.listener?.onItemClick(roomMember) }
              }
+diff --git a/vector/src/main/java/im/vector/app/features/home/HomeActivity.kt b/vector/src/main/java/im/vector/app/features/home/HomeActivity.kt
+index bea9d13..ed02264 100644
+--- a/vector/src/main/java/im/vector/app/features/home/HomeActivity.kt
++++ b/vector/src/main/java/im/vector/app/features/home/HomeActivity.kt
+@@ -583,15 +583,10 @@ class HomeActivity :
+     override fun onResume() {
+         super.onResume()
+ 
++        // Topstar: never prompt/open the bug report screen after a crash — silently discard the crash file
+         if (vectorUncaughtExceptionHandler.didAppCrash()) {
+             vectorUncaughtExceptionHandler.clearAppCrashStatus()
+-
+-            MaterialAlertDialogBuilder(this)
+-                    .setMessage(CommonStrings.send_bug_report_app_crashed)
+-                    .setCancelable(false)
+-                    .setPositiveButton(CommonStrings.yes) { _, _ -> bugReporter.openBugReportScreen(this) }
+-                    .setNegativeButton(CommonStrings.no) { _, _ -> bugReporter.deleteCrashFile() }
+-                    .show()
++            bugReporter.deleteCrashFile()
+         }
+ 
+         // Force remote backup state update to update the banner if needed
 diff --git a/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineViewModel.kt b/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineViewModel.kt
 index f92a062..d05cfc6 100644
 --- a/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineViewModel.kt
@@ -539,8 +566,28 @@ index 7f0ec9b..056c8be 100644
                  val bestName = userMatrixItem.getBestName()
                  headerViews.memberProfileNameView.text = bestName
                  headerViews.memberProfileNameView.setTextColor(matrixItemColorProvider.getColor(userMatrixItem))
+diff --git a/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileController.kt b/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileController.kt
+index 7dd11c2..520a667 100644
+--- a/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileController.kt
++++ b/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileController.kt
+@@ -306,14 +306,7 @@ class RoomProfileController @Inject constructor(
+         // Advanced
+         buildProfileSection(stringProvider.getString(CommonStrings.room_settings_category_advanced_title))
+ 
+-        buildProfileAction(
+-                id = "alias",
+-                title = stringProvider.getString(CommonStrings.room_settings_alias_title),
+-                subtitle = stringProvider.getString(CommonStrings.room_settings_alias_subtitle),
+-                divider = true,
+-                editable = true,
+-                action = { callback?.onRoomAliasesClicked() }
+-        )
++        // Topstar: room addresses screen hidden (exposes real homeserver domain)
+ 
+         buildProfileAction(
+                 id = "permissions",
 diff --git a/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileFragment.kt b/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileFragment.kt
-index 6c1f3b1..6859547 100644
+index 6c1f3b1..58b3539 100644
 --- a/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileFragment.kt
 +++ b/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileFragment.kt
 @@ -39,6 +39,7 @@ import im.vector.app.databinding.ViewStubRoomProfileHeaderBinding
@@ -551,6 +598,18 @@ index 6c1f3b1..6859547 100644
  import im.vector.app.features.home.room.detail.RoomDetailPendingAction
  import im.vector.app.features.home.room.detail.RoomDetailPendingActionStore
  import im.vector.app.features.home.room.detail.upgrade.MigrateRoomBottomSheet
+@@ -162,9 +163,9 @@ class RoomProfileFragment :
+                 roomProfileSharedActionViewModel.post(RoomProfileSharedAction.OpenRoomSettings)
+             }
+         }
+-        // Shortcut to room alias
++        // Topstar: tapping the alias opens room settings instead of the addresses screen (real domain hidden)
+         headerViews.roomProfileAliasView.debouncedClicks {
+-            roomProfileSharedActionViewModel.post(RoomProfileSharedAction.OpenRoomAliasesSettings)
++            roomProfileSharedActionViewModel.post(RoomProfileSharedAction.OpenRoomSettings)
+         }
+         // Open Avatar
+         setOf(
 @@ -229,7 +230,7 @@ class RoomProfileFragment :
              } else {
                  headerViews.roomProfileNameView.text = it.displayName
@@ -662,6 +721,22 @@ index 5741f65..ae046dc 100755
      }
  
      /**
+diff --git a/vector/src/main/java/im/vector/app/features/settings/notifications/troubleshoot/VectorSettingsNotificationsTroubleshootFragment.kt b/vector/src/main/java/im/vector/app/features/settings/notifications/troubleshoot/VectorSettingsNotificationsTroubleshootFragment.kt
+index 5d6f48d..dee0a42 100644
+--- a/vector/src/main/java/im/vector/app/features/settings/notifications/troubleshoot/VectorSettingsNotificationsTroubleshootFragment.kt
++++ b/vector/src/main/java/im/vector/app/features/settings/notifications/troubleshoot/VectorSettingsNotificationsTroubleshootFragment.kt
+@@ -64,9 +64,8 @@ class VectorSettingsNotificationsTroubleshootFragment :
+         val dividerItemDecoration = DividerItemDecoration(view.context, layoutManager.orientation)
+         views.troubleshootTestRecyclerView.addItemDecoration(dividerItemDecoration)
+ 
+-        views.troubleshootSummButton.debouncedClicks {
+-            bugReporter.openBugReportScreen(requireActivity())
+-        }
++        // Topstar: bug reporting disabled - hide the "send logs" shortcut
++        views.troubleshootSummButton.visibility = View.GONE
+ 
+         views.troubleshootRunButton.debouncedClicks {
+             testManager?.retry(TroubleshootTest.TestParameters(testStartForActivityResult, testStartForPermissionResult))
 diff --git a/vector/src/main/java/im/vector/app/features/userdirectory/UserDirectoryUserItem.kt b/vector/src/main/java/im/vector/app/features/userdirectory/UserDirectoryUserItem.kt
 index 9982ccb..ce2b4ef 100644
 --- a/vector/src/main/java/im/vector/app/features/userdirectory/UserDirectoryUserItem.kt
@@ -776,6 +851,18 @@ index 2292480..fa4f766 100644
          android:icon="@drawable/ic_material_bug_report"
          android:title="@string/send_bug_report"
          app:showAsAction="never" />
+diff --git a/vector/src/main/res/menu/vector_room_profile.xml b/vector/src/main/res/menu/vector_room_profile.xml
+index 637481b..4b0f09e 100644
+--- a/vector/src/main/res/menu/vector_room_profile.xml
++++ b/vector/src/main/res/menu/vector_room_profile.xml
+@@ -4,6 +4,7 @@
+     <item
+         android:id="@+id/roomProfileShareAction"
+         android:icon="@drawable/ic_material_share"
++        android:visible="false"
+         android:title="@string/action_share"
+         app:iconTint="?colorSecondary"
+         app:showAsAction="ifRoom" />
 diff --git a/vector/src/main/res/xml/vector_settings_advanced_settings.xml b/vector/src/main/res/xml/vector_settings_advanced_settings.xml
 index 56609fe..ef20349 100644
 --- a/vector/src/main/res/xml/vector_settings_advanced_settings.xml
