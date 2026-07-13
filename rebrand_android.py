@@ -287,6 +287,28 @@ for sf in strings_files:
 log("stripped element.io from %d string files" % changed)
 
 # ---------------------------------------------------------------------------
+# 3b-2) Push gateways: point FCM pushes at our own Sygnal (matrix.org's gateway
+#       only serves Element's own appId), and UnifiedPush fallback at our ntfy.
+# ---------------------------------------------------------------------------
+cfg_changed = 0
+for cf in glob.glob(os.path.join(ROOT, "**", "res", "values*", "config.xml"), recursive=True):
+    with open(cf, encoding="utf-8") as f:
+        c = f.read()
+    o = c
+    # the homeserver sed step may already have rewritten matrix.org -> chat.hauto.store
+    c = c.replace("https://matrix.org/_matrix/push/v1/notify",
+                  "https://sygnal.hauto.store/_matrix/push/v1/notify")
+    c = c.replace("https://chat.hauto.store/_matrix/push/v1/notify",
+                  "https://sygnal.hauto.store/_matrix/push/v1/notify")
+    c = c.replace("https://matrix.gateway.unifiedpush.org/_matrix/push/v1/notify",
+                  "https://ntfy.hauto.store/_matrix/push/v1/notify")
+    if c != o:
+        with open(cf, "w", encoding="utf-8") as f:
+            f.write(c)
+        cfg_changed += 1
+log("push gateways -> sygnal.hauto.store / ntfy.hauto.store in %d config files" % cfg_changed)
+
+# ---------------------------------------------------------------------------
 # 3c) Remove REQUEST_INSTALL_PACKAGES permission (Google Play flags it under the
 #     Device & Network Abuse policy; a chat app does not need to sideload APKs).
 #     The in-app "install APK" feature degrades gracefully: the code guards on
