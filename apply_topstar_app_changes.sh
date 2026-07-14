@@ -646,6 +646,36 @@ diff --git a/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfile
 index 7dd11c2..520a667 100644
 --- a/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileController.kt
 +++ b/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileController.kt
+@@ -241,13 +241,18 @@ class RoomProfileController @Inject constructor(
+         )
+         val numberOfMembers = roomSummary.joinedMembersCount ?: 0
+         val hasWarning = roomSummary.isEncrypted && roomSummary.roomEncryptionTrustLevel == RoomEncryptionTrustLevel.Warning
+-        buildProfileAction(
+-                id = "member_list",
+-                title = stringProvider.getQuantityString(CommonPlurals.room_profile_section_more_member_list, numberOfMembers, numberOfMembers),
+-                icon = R.drawable.ic_room_profile_member_list,
+-                accessory = R.drawable.ic_shield_warning.takeIf { hasWarning } ?: 0,
+-                action = { callback?.onMemberListClicked() }
+-        )
++        // Topstar: broadcast/announcement channels (name starts with U+1F4E2) hide the
++        // member list so subscribers can't see each other in "People".
++        val isBroadcastChannel = roomSummary.name.trimStart().startsWith("📢")
++        if (!isBroadcastChannel) {
++            buildProfileAction(
++                    id = "member_list",
++                    title = stringProvider.getQuantityString(CommonPlurals.room_profile_section_more_member_list, numberOfMembers, numberOfMembers),
++                    icon = R.drawable.ic_room_profile_member_list,
++                    accessory = R.drawable.ic_shield_warning.takeIf { hasWarning } ?: 0,
++                    action = { callback?.onMemberListClicked() }
++            )
++        }
+ 
+         if (data.bannedMembership.invoke()?.isNotEmpty() == true) {
+             buildProfileAction(
+diff --git a/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileController.kt b/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileController.kt
+index 7dd11c2..520a667 100644
+--- a/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileController.kt
++++ b/vector/src/main/java/im/vector/app/features/roomprofile/RoomProfileController.kt
 @@ -306,14 +306,7 @@ class RoomProfileController @Inject constructor(
          // Advanced
          buildProfileSection(stringProvider.getString(CommonStrings.room_settings_category_advanced_title))
@@ -1084,6 +1114,29 @@ index 78e1ba4..c45667c 100644
              tools:summary="3To0 8c/K VRJd 4Njb DUgv 6r8A SNp9 ETZt pMwU CpE4 XJE" />
  
          <im.vector.app.core.preference.VectorSwitchPreference
+diff --git a/vector/src/main/java/im/vector/app/features/home/room/detail/timeline/TimelineEventController.kt b/vector/src/main/java/im/vector/app/features/home/room/detail/timeline/TimelineEventController.kt
+index 722e30b..681cd32 100644
+--- a/vector/src/main/java/im/vector/app/features/home/room/detail/timeline/TimelineEventController.kt
++++ b/vector/src/main/java/im/vector/app/features/home/room/detail/timeline/TimelineEventController.kt
+@@ -379,6 +379,9 @@ class TimelineEventController @Inject constructor(
+             buildCacheItemsIfNeeded()
+         }
+         Timber.v("Time for building cache items: $timeForBuilding ms")
++        // Topstar: broadcast/announcement channels (name starts with 📢) hide read
++        // receipts so subscribers can't see who else is in the room.
++        val isBroadcastChannel = partialState.roomSummary?.name?.trimStart()?.startsWith("📢") == true
+         return modelCache
+                 .map { cacheItemData ->
+                     val eventModel = if (cacheItemData == null || mergedHeaderItemFactory.isCollapsed(cacheItemData.localId)) {
+@@ -387,7 +390,7 @@ class TimelineEventController @Inject constructor(
+                         cacheItemData.eventModel
+                     }
+                     listOf(
+-                            cacheItemData?.readReceiptsItem?.takeUnless { mergedHeaderItemFactory.isCollapsed(cacheItemData.localId) },
++                            cacheItemData?.readReceiptsItem?.takeUnless { isBroadcastChannel || mergedHeaderItemFactory.isCollapsed(cacheItemData.localId) },
+                             eventModel,
+                             cacheItemData?.mergedHeaderModel,
+                             cacheItemData?.formattedDayModel?.takeIf { eventModel != null || cacheItemData.mergedHeaderModel != null }
 TOPSTAR_PATCH_EOF
 
 echo ">> Backing up files that will be modified (into .orig if not present)..."
