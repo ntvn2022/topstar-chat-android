@@ -164,12 +164,14 @@ diff --git a/vector/src/main/java/im/vector/app/features/home/room/detail/Timeli
 index f92a062..d05cfc6 100644
 --- a/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineViewModel.kt
 +++ b/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineViewModel.kt
-@@ -836,14 +836,14 @@ class TimelineViewModel @AssistedInject constructor(
+@@ -836,14 +836,16 @@ class TimelineViewModel @AssistedInject constructor(
                  when (itemId) {
                      R.id.timeline_setting -> true
                      R.id.invite -> state.canInvite
 -                    R.id.open_matrix_apps -> true
-+                    R.id.open_matrix_apps -> false
++                    // Topstar: apps icon hidden by default, but SHOWN when the room has a
++                    // real widget (e.g. broadcast "trang tin") so users can open/view it.
++                    R.id.open_matrix_apps -> state.activeRoomWidgets.invoke()?.any { it.type != WidgetType.Jitsi } == true
                      R.id.voice_call -> state.isCallOptionAvailable() || state.hasActiveElementCallWidget()
                      R.id.video_call -> state.isCallOptionAvailable() || state.jitsiState.confId == null || state.jitsiState.hasJoined
                      // Show Join conference button only if there is an active conf id not joined. Otherwise fallback to default video disabled. ^
@@ -1137,6 +1139,111 @@ index 722e30b..681cd32 100644
                              eventModel,
                              cacheItemData?.mergedHeaderModel,
                              cacheItemData?.formattedDayModel?.takeIf { eventModel != null || cacheItemData.mergedHeaderModel != null }
+diff --git a/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineFragment.kt b/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineFragment.kt
+index 01be29d..b8069ec 100644
+--- a/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineFragment.kt
++++ b/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineFragment.kt
+@@ -147,6 +147,7 @@ import im.vector.app.features.home.room.detail.timeline.readreceipts.DisplayRead
+ import im.vector.app.features.home.room.detail.timeline.url.PreviewUrlRetriever
+ import im.vector.app.features.home.room.detail.upgrade.MigrateRoomBottomSheet
+ import im.vector.app.features.home.room.detail.views.RoomDetailLazyLoadedViews
++import im.vector.app.features.home.room.detail.widget.RoomWidgetsBannerView
+ import im.vector.app.features.home.room.detail.widget.RoomWidgetsBottomSheet
+ import im.vector.app.features.home.room.threads.ThreadsManager
+ import im.vector.app.features.home.room.threads.arguments.ThreadTimelineArgs
+@@ -330,6 +331,7 @@ class TimelineFragment :
+         setupActiveCallView()
+         setupJumpToBottomView()
+         setupRemoveJitsiWidgetView()
++        setupWidgetsBanner()
+         setupLiveLocationIndicator()
+         setupBackPressHandling()
+ 
+@@ -1137,6 +1139,10 @@ class TimelineFragment :
+         val summary = mainState.asyncRoomSummary()
+         renderToolbar(summary)
+         views.removeJitsiWidgetView.render(mainState)
++        // Topstar: pin the "trang tin" widget banner at the top of broadcast (📢) rooms.
++        val isBroadcastChannel = summary?.name?.trimStart()?.startsWith("📢") == true
++        val pinnedWidgets = mainState.activeRoomWidgets().orEmpty().filter { it.type != WidgetType.Jitsi }
++        views.roomWidgetsBanner.render(if (isBroadcastChannel) pinnedWidgets else null)
+         if (mainState.hasFailedSending) {
+             lazyLoadedViews.failedMessagesWarningView(inflateIfNeeded = true, createFailedMessagesWarningCallback())?.isVisible = true
+         } else {
+@@ -2028,6 +2034,24 @@ class TimelineFragment :
+                 .show(childFragmentManager, "ROOM_WIDGETS_BOTTOM_SHEET")
+     }
+ 
++    // Topstar: tapping the pinned "trang tin" banner opens the widget full-screen (or the
++    // widget list if there is more than one).
++    private fun setupWidgetsBanner() {
++        views.roomWidgetsBanner.callback = object : RoomWidgetsBannerView.Callback {
++            override fun onViewWidgetsClicked() {
++                openPinnedWidget()
++            }
++        }
++    }
++
++    private fun openPinnedWidget() = withState(timelineViewModel) { state ->
++        val widgets = state.activeRoomWidgets().orEmpty().filter { it.type != WidgetType.Jitsi }
++        when {
++            widgets.size == 1 -> navigator.openRoomWidget(requireContext(), state.roomId, widgets.first())
++            widgets.isNotEmpty() -> onViewWidgetsClicked()
++        }
++    }
++
+     private fun handleOpenElementCallWidget() = withState(timelineViewModel) { state ->
+         state
+                 .activeRoomWidgets()
+diff --git a/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetsBannerView.kt b/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetsBannerView.kt
+index 7d2aa4a..13ca320 100644
+--- a/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetsBannerView.kt
++++ b/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetsBannerView.kt
+@@ -48,7 +48,13 @@ class RoomWidgetsBannerView @JvmOverloads constructor(
+             visibility = View.GONE
+         } else {
+             visibility = View.VISIBLE
+-            views.activeWidgetsLabel.text = context.resources.getQuantityString(CommonPlurals.active_widgets, widgets.size, widgets.size)
++            // Topstar: show the widget's own name (e.g. "📢 Topstar Tin sản phẩm") when there
++            // is a single pinned widget, instead of the generic "N active widgets" count.
++            views.activeWidgetsLabel.text = if (widgets.size == 1) {
++                widgets.first().name
++            } else {
++                context.resources.getQuantityString(CommonPlurals.active_widgets, widgets.size, widgets.size)
++            }
+         }
+     }
+ }
+diff --git a/vector/src/main/res/layout/fragment_timeline.xml b/vector/src/main/res/layout/fragment_timeline.xml
+index a022ad2..518e2d4 100644
+--- a/vector/src/main/res/layout/fragment_timeline.xml
++++ b/vector/src/main/res/layout/fragment_timeline.xml
+@@ -71,6 +71,16 @@
+             app:layout_constraintStart_toStartOf="parent"
+             app:layout_constraintTop_toBottomOf="@id/liveLocationStatusIndicator" />
+ 
++        <im.vector.app.features.home.room.detail.widget.RoomWidgetsBannerView
++            android:id="@+id/roomWidgetsBanner"
++            android:layout_width="0dp"
++            android:layout_height="wrap_content"
++            android:visibility="gone"
++            app:layout_constraintEnd_toEndOf="parent"
++            app:layout_constraintStart_toStartOf="parent"
++            app:layout_constraintTop_toBottomOf="@id/removeJitsiWidgetView"
++            tools:visibility="visible" />
++
+         <androidx.recyclerview.widget.RecyclerView
+             android:id="@+id/timelineRecyclerView"
+             android:layout_width="0dp"
+@@ -79,7 +89,7 @@
+             app:layout_constraintBottom_toTopOf="@id/failedMessagesWarningStub"
+             app:layout_constraintEnd_toEndOf="parent"
+             app:layout_constraintStart_toStartOf="parent"
+-            app:layout_constraintTop_toBottomOf="@id/removeJitsiWidgetView"
++            app:layout_constraintTop_toBottomOf="@id/roomWidgetsBanner"
+             tools:listitem="@layout/item_timeline_event_base" />
+ 
+         <com.google.android.material.chip.Chip
 TOPSTAR_PATCH_EOF
 
 echo ">> Backing up files that will be modified (into .orig if not present)..."
