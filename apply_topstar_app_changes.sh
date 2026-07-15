@@ -1286,6 +1286,53 @@ index 3333333..4444444 100644
      }
 
      interface Listener {
+diff --git a/vector/src/main/java/im/vector/app/features/widgets/WidgetFragment.kt b/vector/src/main/java/im/vector/app/features/widgets/WidgetFragment.kt
+index 5555555..6666666 100644
+--- a/vector/src/main/java/im/vector/app/features/widgets/WidgetFragment.kt
++++ b/vector/src/main/java/im/vector/app/features/widgets/WidgetFragment.kt
+@@ -152,5 +152,5 @@ class WidgetFragment :
+             } else {
+                 menu.findItem(R.id.action_refresh)?.isVisible = true
+-                menu.findItem(R.id.action_widget_open_ext)?.isVisible = true
++                menu.findItem(R.id.action_widget_open_ext)?.isVisible = false // Topstar: hide "Open in browser"
+                 menu.findItem(R.id.action_delete)?.isVisible = state.canManageWidgets && widget.isAddedByMe
+                 menu.findItem(R.id.action_revoke)?.isVisible = state.status == WidgetStatus.WIDGET_ALLOWED && !widget.isAddedByMe
+diff --git a/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineFragment.kt b/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineFragment.kt
+index 7777777..8888888 100644
+--- a/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineFragment.kt
++++ b/vector/src/main/java/im/vector/app/features/home/room/detail/TimelineFragment.kt
+@@ -1397,3 +1397,5 @@ class TimelineFragment :
+     override fun onUrlClicked(url: String, title: String): Boolean {
++        // Topstar: open the URL in a matching active room widget (in-app) instead of a browser.
++        if (openUrlInMatchingRoomWidget(url)) return true
+         viewLifecycleOwner.lifecycleScope.launch {
+             val isManaged = permalinkHandler
+@@ -1455,5 +1457,25 @@ class TimelineFragment :
+         // In fact it is always managed
+         return true
+     }
+
++    // Topstar: if [url]'s host matches an active non-Jitsi room widget, open that widget
++    // full-screen inside the app pointed straight at [url] (the article), not a browser.
++    private fun openUrlInMatchingRoomWidget(url: String): Boolean {
++        val host = runCatching { URL(url).host }.getOrNull()?.lowercase() ?: return false
++        val widget = withState(timelineViewModel) { state ->
++            state.activeRoomWidgets.invoke().orEmpty().firstOrNull { candidate ->
++                candidate.type !is WidgetType.Jitsi &&
++                        runCatching { URL(candidate.widgetContent.url).host }.getOrNull()?.lowercase() == host
++            }
++        } ?: return false
++        val widgetArgs = WidgetArgs(
++                baseUrl = url,
++                kind = WidgetKind.ROOM,
++                roomId = timelineArgs.roomId,
++                widgetId = widget.widgetId
++        )
++        startActivity(WidgetActivity.newIntent(requireContext(), widgetArgs))
++        return true
++    }
++
+     private fun displayUrlConfirmationDialog(seenUrl: String, actualUrl: String, continueTo: String = actualUrl) {
 TOPSTAR_PATCH_EOF
 
 echo ">> Backing up files that will be modified (into .orig if not present)..."
