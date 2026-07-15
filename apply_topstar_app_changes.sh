@@ -1333,6 +1333,50 @@ index 7777777..8888888 100644
 +    }
 +
      private fun displayUrlConfirmationDialog(seenUrl: String, actualUrl: String, continueTo: String = actualUrl) {
+diff --git a/vector/src/main/java/im/vector/app/features/widgets/WidgetViewModel.kt b/vector/src/main/java/im/vector/app/features/widgets/WidgetViewModel.kt
+index 1c4c19b..c35c964 100644
+--- a/vector/src/main/java/im/vector/app/features/widgets/WidgetViewModel.kt
++++ b/vector/src/main/java/im/vector/app/features/widgets/WidgetViewModel.kt
+@@ -68,9 +68,9 @@ class WidgetViewModel @AssistedInject constructor(
+             }
+             postAPIMediator.setHandler(widgetPostAPIHandler)
+         }
+-        if (!integrationManagerService.isIntegrationEnabled()) {
+-            _viewEvents.post(WidgetViewEvents.Close(null))
+-        }
++        // Topstar: do NOT close the widget when the (hidden) integration-manager toggle is
++        // off. Our rooms use custom widgets (Lịch, Trang tin) added via state events, which
++        // must open regardless of the integration-provisioning account-data flag.
+         setupName()
+         refreshPermissionStatus()
+         observePowerLevel()
+@@ -179,22 +179,10 @@ class WidgetViewModel @AssistedInject constructor(
+                 setWidgetStatus(WidgetStatus.WIDGET_NOT_ALLOWED)
+                 return
+             }
+-            if (roomWidget.event.senderId == session.myUserId) {
+-                setWidgetStatus(WidgetStatus.WIDGET_ALLOWED)
+-            } else {
+-                val stateEventId = roomWidget.event.eventId
+-                // This should not happen
+-                if (stateEventId == null) {
+-                    setWidgetStatus(WidgetStatus.WIDGET_NOT_ALLOWED)
+-                    return
+-                }
+-                val isAllowed = integrationManagerService.isWidgetAllowed(stateEventId)
+-                if (!isAllowed) {
+-                    setWidgetStatus(WidgetStatus.WIDGET_NOT_ALLOWED)
+-                } else {
+-                    setWidgetStatus(WidgetStatus.WIDGET_ALLOWED)
+-                }
+-            }
++            // Topstar: room widgets are all our own trusted hauto.store apps (Lịch, Trang
++            // tin), so load them directly without the per-widget consent prompt — which
++            // otherwise blocks widgets created by the bot account (@qinghe) on every open.
++            setWidgetStatus(WidgetStatus.WIDGET_ALLOWED)
+         }
+     }
+ 
 TOPSTAR_PATCH_EOF
 
 echo ">> Backing up files that will be modified (into .orig if not present)..."
