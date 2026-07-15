@@ -1242,8 +1242,50 @@ index a022ad2..518e2d4 100644
 -            app:layout_constraintTop_toBottomOf="@id/removeJitsiWidgetView"
 +            app:layout_constraintTop_toBottomOf="@id/roomWidgetsBanner"
              tools:listitem="@layout/item_timeline_event_base" />
- 
+
          <com.google.android.material.chip.Chip
+diff --git a/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetItem.kt b/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetItem.kt
+index 1111111..2222222 100644
+--- a/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetItem.kt
++++ b/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetItem.kt
+@@ -34,7 +34,9 @@ abstract class RoomWidgetItem : VectorEpoxyModel<RoomWidgetItem.Holder>(R.layout.item_room_widget) {
+     override fun bind(holder: Holder) {
+         super.bind(holder)
+         holder.widgetName.text = widget.name
+         holder.widgetUrl.text = tryOrNull { URL(widget.widgetContent.url) }?.host ?: widget.widgetContent.url
++        // Topstar: hide the secondary domain/host subtitle line under each widget name.
++        holder.widgetUrl.isVisible = false
+         if (iconRes != null) {
+             holder.iconImage.isVisible = true
+             holder.iconImage.setImageResource(iconRes!!)
+diff --git a/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetsController.kt b/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetsController.kt
+index 3333333..4444444 100644
+--- a/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetsController.kt
++++ b/vector/src/main/java/im/vector/app/features/home/room/detail/widget/RoomWidgetsController.kt
+@@ -10,7 +10,6 @@ package im.vector.app.features.home.room.detail.widget
+ import com.airbnb.epoxy.TypedEpoxyController
+ import im.vector.app.core.resources.ColorProvider
+ import im.vector.app.core.resources.StringProvider
+-import im.vector.app.core.ui.list.genericButtonItem
+ import im.vector.app.core.ui.list.genericFooterItem
+ import im.vector.lib.core.utils.epoxy.charsequence.toEpoxyCharSequence
+ import im.vector.lib.strings.CommonStrings
+@@ -43,13 +42,9 @@ class RoomWidgetsController @Inject constructor(
+                     widgetClicked { host.listener?.didSelectWidget(widget) }
+                 }
+             }
+         }
+-        genericButtonItem {
+-            id("addIntegration")
+-            text(host.stringProvider.getString(CommonStrings.room_manage_integrations))
+-            textColor(host.colorProvider.getColorFromAttribute(com.google.android.material.R.attr.colorPrimary))
+-            buttonClickAction { host.listener?.didSelectManageWidgets() }
+-        }
++        // Topstar: "Manage Integrations" removed — the integration manager screen is
++        // not supported on mobile ("managing extensions isn't supported on this device").
+     }
+
+     interface Listener {
 TOPSTAR_PATCH_EOF
 
 echo ">> Backing up files that will be modified (into .orig if not present)..."
