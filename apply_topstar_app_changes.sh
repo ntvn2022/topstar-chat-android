@@ -1290,6 +1290,13 @@ diff --git a/vector/src/main/java/im/vector/app/features/widgets/WidgetFragment.
 index 5555555..6666666 100644
 --- a/vector/src/main/java/im/vector/app/features/widgets/WidgetFragment.kt
 +++ b/vector/src/main/java/im/vector/app/features/widgets/WidgetFragment.kt
+@@ -144,5 +144,5 @@ class WidgetFragment :
+         withState(viewModel) { state ->
+             val widget = state.asyncWidget()
+-            menu.findItem(R.id.action_edit)?.isVisible = state.widgetKind != WidgetKind.INTEGRATION_MANAGER
++            menu.findItem(R.id.action_edit)?.isVisible = false // Topstar: hide "Edit" (opens integration-manager, unsupported on mobile + Element branding)
+             if (widget == null) {
+                 menu.findItem(R.id.action_refresh)?.isVisible = false
 @@ -152,5 +152,5 @@ class WidgetFragment :
              } else {
                  menu.findItem(R.id.action_refresh)?.isVisible = true
