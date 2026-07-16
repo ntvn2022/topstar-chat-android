@@ -399,6 +399,7 @@ for p in glob.glob(os.path.join(ROOT, "**", "vector_settings_help_about.xml"), r
 assert about_xml, "vector_settings_help_about.xml not found"
 NEW_ABOUT = '''<?xml version="1.0" encoding="utf-8"?>
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools">
 
     <im.vector.app.core.preference.VectorPreferenceCategory android:title="Lien he / Support">
@@ -435,11 +436,13 @@ NEW_ABOUT = '''<?xml version="1.0" encoding="utf-8"?>
         <im.vector.app.core.preference.VectorPreference
             android:key="SETTINGS_SDK_VERSION_PREFERENCE_KEY"
             android:title="@string/settings_sdk_version"
+            app:isPreferenceVisible="false"
             tools:summary="4.5.6" />
 
         <im.vector.app.core.preference.VectorPreference
             android:key="SETTINGS_CRYPTO_VERSION_PREFERENCE_KEY"
             android:title="@string/settings_crypto_version"
+            app:isPreferenceVisible="false"
             tools:summary="7.8.9" />
 
     </im.vector.app.core.preference.VectorPreferenceCategory>
