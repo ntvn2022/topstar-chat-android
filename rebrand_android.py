@@ -224,12 +224,18 @@ assert 'applicationId "im.vector.app"' in g, "applicationId anchor not found"
 g = g.replace('applicationId "im.vector.app"',
               'applicationId "com.hant.topstarchat"', 1)
 
-# 2c-2b) User-facing version: replace Element's 1.6.60(-dev) with Topstar's own
-#        1.0.0 (versionCode stays derived from Element's, still monotonic).
+# 2c-2b) User-facing version: replace Element's 1.6.60(-dev) with Topstar's own.
+#        Bump this on every Play upload; versionCode is derived from versionPatch
+#        below and must strictly increase for Play to accept the update.
+TOPSTAR_VERSION_NAME = "1.0.1"
 g = g.replace('versionName "${versionMajor}.${versionMinor}.${versionPatch}${getGplayVersionSuffix()}"',
-              'versionName "1.0.0"')
+              'versionName "%s"' % TOPSTAR_VERSION_NAME)
 g = g.replace('versionName "${versionMajor}.${versionMinor}.${versionPatch}${getFdroidVersionSuffix()}"',
-              'versionName "1.0.0"')
+              'versionName "%s"' % TOPSTAR_VERSION_NAME)
+# Bump versionCode: raise Element's versionPatch 60 -> 61 so the computed
+# versionCode goes 40106600 -> 40106610 (> the 1.0.0 already on Play).
+assert 'ext.versionPatch = 60' in g, "versionPatch anchor not found"
+g = g.replace('ext.versionPatch = 60', 'ext.versionPatch = 61', 1)
 
 # 2c-3) ABI splits are incompatible with building an Android App Bundle (AAB):
 #       AGP errors "Multiple shrunk-resources files found ... Please disable
