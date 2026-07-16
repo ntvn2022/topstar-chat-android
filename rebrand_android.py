@@ -50,6 +50,28 @@ shutil.copy(os.path.join(ASSETS, "drawable", "ic_launcher_background.xml"),
 log("adaptive icon updated")
 
 # ---------------------------------------------------------------------------
+# 1b) Notification small icon (status bar). Android tints this to a flat
+#     silhouette, so it MUST be white-on-transparent. Element ships a coloured
+#     ic_notification.png that renders as a white square once tinted. Replace it
+#     with the Topstar italic "T" white silhouette at every density. Lives in the
+#     vector module (drawable-<density>/ic_notification.png); NotificationUtils
+#     setSmallIcon(R.drawable.ic_notification) picks it up for message pushes.
+# ---------------------------------------------------------------------------
+VECTOR_RES = os.path.join(ROOT, "vector", "src", "main", "res")
+# drop any stray ic_notification.* (png/xml, any density) so ours is the only one
+for p in glob.glob(os.path.join(ROOT, "**", "res", "drawable*", "ic_notification.*"),
+                   recursive=True):
+    os.remove(p)
+for d in DENS:
+    src = os.path.join(ASSETS, "notification", "drawable-" + d, "ic_notification.png")
+    assert os.path.exists(src), "missing asset " + src
+    dst = os.path.join(VECTOR_RES, "drawable-" + d)
+    os.makedirs(dst, exist_ok=True)
+    shutil.copy(src, os.path.join(dst, "ic_notification.png"))
+    log("ic_notification -> drawable-" + d)
+log("notification small icon updated")
+
+# ---------------------------------------------------------------------------
 # 2) Splash / login logos: remove old drawables (any module, any variant),
 #    drop replacement PNGs into vector module drawable-nodpi
 # ---------------------------------------------------------------------------
